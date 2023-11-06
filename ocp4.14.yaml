@@ -1,0 +1,83 @@
+---
+- hosts: all
+  tasks:
+  - name: Package installation
+    dnf:
+      name:
+        - unzip
+        - curl
+      state: latest
+  - name: OCP Install and Client Installation
+    ansible.builtin.shell: |  
+      mkdir ocp
+      cd ocp/
+      curl -O -k https://"{{ vcenterurl }}"/certs/download.zip
+      unzip download.zip
+      cp certs/lin/* /etc/pki/ca-trust/source/anchors
+      update-ca-trust extract    
+      curl "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-{{ ocp_version }}/openshift-install-linux.tar.gz" | tar xz -C /tmp
+      mv /tmp/openshift-install /usr/local/bin 
+      curl "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-{{ ocp_version }}/openshift-client-linux.tar.gz" | tar xz -C /tmp
+      mv /tmp/oc /usr/local/bin 
+      mv /tmp/kubectl /usr/local/bin 
+      cat << EOF > install-config.yaml
+      apiVersion: v1
+      baseDomain: {{ domian_name }}
+      compute: 
+      - hyperthreading: Enabled 
+        name: {{ ocp_computenode_name }}
+        replicas: {{ ocp_computenode_replicas }}
+        platform:
+          vsphere: 
+            cpus: {{ ocp_compute_vcpus }}
+            coresPerSocket: {{ ocp_compute_corepersocket}}
+            memoryMB: {{ ocp_compute_memory_mb }}
+            osDisk:
+              diskSizeGB: {{ ocp_compute_osdisksize }}
+      controlPlane: 
+        hyperthreading: Enabled 
+        name: {{ ocp_controleplanenode_name}}
+        replicas: {{ ocp_controlplane_replicas }}
+        platform:
+          vsphere: 
+          cpus: {{ ocp_controlerplanenode_vcpus }}
+          coresPerSocket: {{ ocp_controlplane_corepersocket }}
+          memoryMB: {{ ocp_controleplanenode_memeory_mb }}
+          osDisk:
+            diskSizeGB: {{ ocp_controlnode_osdisksize }}
+      metadata:
+        name: {{ ocp_clustername }}
+      networking:
+        clusterNetwork:
+        - cidr: {{ ocp_clusternetwork }}
+          hostPrefix: 23
+        machineNetwork:
+        - cidr: {{ ocp_machinenetwork }}
+        networkType: {{ ocp_networktype }}
+        serviceNetwork:
+        - {{ ocp_servicenetwork }}
+      platform:
+        vsphere:
+          vcenter: {{ vcenterurl }}
+          username: {{ vcenter_username }}
+          password: {{ vcenter_userpassword }}
+          datacenter: {{ vcenter_datacenter_name }}
+          defaultDatastore: {{ vcenter_datstore_name}}
+          diskType: thin
+          network: {{ vcenter_network_name }}
+          cluster: {{ vcenter_cluster_name }}
+          folder: /{{ vcenter_datacenter_name }}/vm/{{ vcenter_foldername }}
+          apiVIPs: 
+            - {{ ocp_api_vip }}
+          ingressVIPs: 
+          - {{ ocp_ingress_vip }}
+      fips: false
+      pullSecret: '{{ ocp_pullsecret }}'
+      sshKey: '{{ ssh_key }}'
+      EOF
+      chmod +x /root/ocp/install-config.yaml  
+  - name: Openshift Deployment
+    command: 'openshift-install create cluster --dir /root/ocp/ --log-level=DEBUG'
+    register: ocp_deployment 
+  - debug: var=ocp_deployment.stdout_lines
+    become: true
