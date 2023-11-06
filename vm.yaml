@@ -1,0 +1,37 @@
+- hosts: localhost
+  gather_facts: no
+  connection: local   
+  tasks:
+  - name: Clone the VM template and customize
+    vmware_guest:
+      name: "{{ vm_hostname }}"
+      datacenter: "{{ datacenter_name }}"
+      folder: /{{ datacenter_name }}/vm/{{ folder }}
+      cluster: "{{ cluster_name }}"
+      datastore: "{{datastore}}"
+      template: "{{template}}"
+      state: poweredon
+      networks:
+      - name: "{{ network }}"
+        start_connected: yes
+        ip: "{{ vm_ip }}"
+        netmask: "{{ netmask }}"
+        gateway: "{{ gateway }}"
+        type: static
+      wait_for_ip_address: true
+      customization:
+        hostname: "{{ vm_hostname }}"
+        dns_servers:
+        - "{{ dns1 }}"
+        - "{{ dns2 }}"   
+      disk: 
+      - size_gb: "{{ vm_disk_size }}"
+        type: thin 
+        datastore: "{{datastore }}"
+        unit_number: 1 
+        controller_number: 0
+        controller_type: 'paravirtual'
+      hardware:
+        memory_mb: "{{ memory_mb }}"
+        num_cpus: "{{ vcpus }}"
+    delegate_to: localhost
